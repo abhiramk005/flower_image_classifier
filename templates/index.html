@@ -1,0 +1,288 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Flower Classifier</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='styles.css') }}">
+    <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@300;400;500;600&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0-beta3/css/all.min.css">
+</head>
+<body>
+    <div class="container">
+        <h1>🌸 Flower Classifier</h1>
+
+        <div class="input-sections">
+            <!-- Upload Section -->
+            <div class="card upload-section">
+                <h2><i class="fas fa-cloud-upload-alt"></i> Upload Flower Image</h2>
+
+                <div id="dropzone" class="dropzone">
+                    <i class="fas fa-images"></i>
+                    <p>Drag & drop your flower image here or click to browse</p>
+                    <input type="file" id="fileInput" class="file-input" accept="image/*" required>
+                </div>
+            </div>
+
+            <!-- Webcam Section -->
+            <div class="card webcam-section">
+                <h2><i class="fas fa-camera"></i> Capture from Webcam</h2>
+
+                <div class="webcam-container">
+                    <div id="webcamPlaceholder" class="webcam-placeholder">
+                        <p>Webcam feed will appear here</p>
+                    </div>
+                    <video id="webcam" autoplay playsinline></video>
+                    <canvas id="canvas"></canvas>
+                </div>
+
+                <div class="controls">
+                    <button id="startWebcamBtn" class="btn">
+                        <i class="fas fa-video"></i> Start Webcam
+                    </button>
+                    <button id="captureBtn" class="btn btn-secondary" disabled>
+                        <i class="fas fa-camera"></i> Capture
+                    </button>
+                </div>
+            </div>
+        </div>
+
+        <!-- Shared Preview & Actions -->
+        <div class="card control-section">
+            <h2><i class="fas fa-eye"></i> Preview & Actions</h2>
+            <img id="previewImage" class="preview-image" alt="Preview">
+            <div class="controls">
+                <button id="classifyBtn" class="btn" disabled>
+                    <i class="fas fa-search"></i> Classify Flower
+                </button>
+                <button id="clearBtn" class="btn btn-secondary">
+                    <i class="fas fa-times"></i> Clear
+                </button>
+            </div>
+            <div id="resultSection" class="card result">
+            <h3>Prediction Result</h3>
+            <div id="predictionResult"></div>
+        </div>
+        </div>
+
+        <!-- Result Section -->
+
+    </div>
+
+    <script>
+    // Drag and drop functionality
+    const dropzone = document.getElementById('dropzone');
+    const fileInput = document.getElementById('fileInput');
+    const classifyBtn = document.getElementById('classifyBtn');
+    const previewImage = document.getElementById('previewImage');
+    const resultSection = document.getElementById('resultSection');
+    const predictionResult = document.getElementById('predictionResult');
+    const clearBtn = document.getElementById('clearBtn');
+
+    dropzone.addEventListener('click', () => fileInput.click());
+
+    fileInput.addEventListener('change', (e) => {
+        if (e.target.files.length) {
+            handleFile(e.target.files[0]);
+        }
+    });
+
+    ['dragenter', 'dragover', 'dragleave', 'drop'].forEach(eventName => {
+        dropzone.addEventListener(eventName, preventDefaults, false);
+    });
+
+    function preventDefaults(e) {
+        e.preventDefault();
+        e.stopPropagation();
+    }
+
+    ['dragenter', 'dragover'].forEach(eventName => {
+        dropzone.addEventListener(eventName, highlight, false);
+    });
+
+    ['dragleave', 'drop'].forEach(eventName => {
+        dropzone.addEventListener(eventName, unhighlight, false);
+    });
+
+    function highlight() {
+        dropzone.classList.add('active');
+    }
+
+    function unhighlight() {
+        dropzone.classList.remove('active');
+    }
+
+    dropzone.addEventListener('drop', (e) => {
+        const dt = e.dataTransfer;
+        const file = dt.files[0];
+        handleFile(file);
+    });
+
+    function handleFile(file) {
+        if (!file.type.match('image.*')) {
+            alert('Please select an image file.');
+            return;
+        }
+
+        const reader = new FileReader();
+        reader.onload = (e) => {
+            previewImage.src = e.target.result;
+            previewImage.style.display = 'block';
+            classifyBtn.disabled = false;
+        };
+        reader.readAsDataURL(file);
+
+        // Store the file for submission
+        classifyBtn.file = file;
+    }
+
+    classifyBtn.addEventListener('click', () => {
+        if (!classifyBtn.file) {
+            alert("⚠️ Please upload or capture an image before classifying.");
+            return;  // Prevent any further execution
+        }
+
+        const formData = new FormData();
+        formData.append('image', classifyBtn.file);
+
+        // Show loading state
+        classifyBtn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Classifying...';
+        classifyBtn.disabled = true;
+
+        fetch('/', {
+            method: 'POST',
+            body: formData
+        })
+        .then(response => {
+            if (!response.ok) {
+            return response.json().then(errData => {
+                throw new Error(errData.error || 'Server error');
+            });
+        }
+            return response.json();
+        })
+        .then(data => {
+            if (data.error) {
+                throw new Error(data.error);
+            }
+            // Display results
+            predictionResult.innerHTML = `
+                <p><strong>Flower Type:</strong> ${data.prediction}</p>
+                <p><strong>Confidence:</strong> ${data.confidence}</p>
+            `;
+            resultSection.style.display = 'block';
+        })
+        .catch(error => {
+            console.error('Error:', error);
+            predictionResult.textContent = `Error: ${error.message}`;
+            resultSection.style.display = 'block';
+        })
+        .finally(() => {
+            // Reset button state
+            classifyBtn.innerHTML = '<i class="fas fa-search"></i> Classify Flower';
+            classifyBtn.disabled = false;
+        });
+    });
+
+    // Webcam functionality
+    const webcam = document.getElementById('webcam');
+    const canvas = document.getElementById('canvas');
+    const startWebcamBtn = document.getElementById('startWebcamBtn');
+    const captureBtn = document.getElementById('captureBtn');
+    const webcamPlaceholder = document.getElementById('webcamPlaceholder');
+
+    startWebcamBtn.addEventListener('click', () => {
+        if (webcam.style.display === 'block') {
+            // Stop webcam
+            stopWebcam();
+        } else {
+            // Start webcam
+            startWebcam();
+        }
+    });
+
+    function startWebcam() {
+        navigator.mediaDevices.getUserMedia({
+            video: {
+                width: { ideal: 1280 },
+                height: { ideal: 720 },
+                facingMode: "environment"
+            },
+            audio: false
+        })
+        .then(stream => {
+            webcam.srcObject = stream;
+            webcam.style.display = 'block';
+            webcamPlaceholder.style.display = 'none';
+            startWebcamBtn.innerHTML = '<i class="fas fa-stop"></i> Stop Webcam';
+            captureBtn.disabled = false;
+        })
+        .catch(err => {
+            console.error("Error accessing webcam: ", err);
+            alert("Could not access the webcam. Please check permissions.");
+        });
+    }
+
+    function stopWebcam() {
+        const stream = webcam.srcObject;
+        if (stream) {
+            stream.getTracks().forEach(track => track.stop());
+        }
+        webcam.style.display = 'none';
+        webcamPlaceholder.style.display = 'flex';
+        startWebcamBtn.innerHTML = '<i class="fas fa-video"></i> Start Webcam';
+        captureBtn.disabled = true;
+    }
+
+    captureBtn.addEventListener('click', () => {
+    const width = webcam.videoWidth;
+    const height = webcam.videoHeight;
+
+    canvas.width = width;
+    canvas.height = height;
+
+    const ctx = canvas.getContext('2d');
+    ctx.drawImage(webcam, 0, 0, width, height);
+
+    // Convert canvas to blob and handle as file
+    canvas.toBlob(blob => {
+        const file = new File([blob], 'webcam-capture.jpg', { type: 'image/jpeg' });
+        handleFile(file);
+
+        // Hide canvas and webcam (optional), since preview is shown separately
+        canvas.style.display = 'none';
+        webcam.style.display = 'none';
+        webcamPlaceholder.style.display = 'flex';
+
+        // Stop webcam to free up resources
+        stopWebcam();
+
+        classifyBtn.file = file;
+        classifyBtn.disabled = false;
+    }, 'image/jpeg', 0.95);
+});
+clearBtn.addEventListener('click', () => {
+    // Clear preview
+    previewImage.src = '';
+    previewImage.style.display = 'none';
+
+    // Clear prediction
+    predictionResult.innerHTML = '';
+    resultSection.style.display = 'none';
+
+    // Clear file input
+    fileInput.value = '';
+    classifyBtn.file = null;
+    classifyBtn.disabled = true;
+
+    // Stop webcam if running
+    stopWebcam();
+
+    // Reset canvas
+    const ctx = canvas.getContext('2d');
+    ctx.clearRect(0, 0, canvas.width, canvas.height);
+});
+
+    // Make sure to stop webcam when leaving page
+    window.addEventListener('beforeunload', stopWebcam);
+</script>
+</body>
+</html>

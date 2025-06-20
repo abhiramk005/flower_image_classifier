@@ -1,0 +1,7 @@
+# Ignore specific subfolders
+venv/
+__pycache__/
+logs/
+temp_data/
+model_training/flowers
+model_training/model
