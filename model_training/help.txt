@@ -1,0 +1,11 @@
+to train the model store image in flower directory (create new in model_training) then store images of each class as seperate folders 
+for example:
+flowers/
+  ├── daisy/
+  │     ├── image1.jpg
+  │     ├── image2.jpg
+  │     └── ...
+  ├── dandelion/
+  ├── rose/
+  ├── sunflower/
+  └── tulip/
